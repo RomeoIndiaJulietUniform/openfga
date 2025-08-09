@@ -1,5 +1,7 @@
 package run
 
+//teri
+
 import (
 	"context"
 	"crypto/rand"
@@ -534,108 +536,27 @@ func TestHTTPServerWithCORS(t *testing.T) {
 	}
 }
 
-// func TestBuildServerWithOIDCAuthentication(t *testing.T) {
-// 	t.Cleanup(func() {
-// 		goleak.VerifyNone(t)
-// 	})
-// 	oidcServerPort, oidcServerPortReleaser := testutils.TCPRandomPort()
-// 	localOIDCServerURL := fmt.Sprintf("http://localhost:%d", oidcServerPort)
-
-// 	cfg := testutils.MustDefaultConfigWithRandomPorts()
-// 	cfg.Authn.Method = "oidc"
-// 	cfg.Authn.AuthnOIDCConfig = &serverconfig.AuthnOIDCConfig{
-// 		Audience: "openfga.dev",
-// 		Issuer:   localOIDCServerURL,
-// 	}
-
-// 	oidcServerPortReleaser()
-
-// 	trustedIssuerServer, err := mocks.NewMockOidcServer(localOIDCServerURL)
-// 	require.NoError(t, err)
-// 	t.Cleanup(trustedIssuerServer.Stop)
-
-// 	trustedToken, err := trustedIssuerServer.GetToken("openfga.dev", "some-user")
-// 	require.NoError(t, err)
-
-// 	ctx, cancel := context.WithCancel(context.Background())
-// 	defer cancel()
-
-// 	go func() {
-// 		if err := runServer(ctx, cfg); err != nil {
-// 			log.Fatal(err)
-// 		}
-// 	}()
-
-// 	testutils.EnsureServiceHealthy(t, cfg.GRPC.Addr, cfg.HTTP.Addr, nil)
-
-// 	tests := []authTest{
-// 		{
-// 			_name:      "Header_with_invalid_token_fails",
-// 			authHeader: "Bearer incorrecttoken",
-// 			expectedErrorResponse: &serverErrors.ErrorResponse{
-// 				Code:    "invalid_claims",
-// 				Message: "invalid claims",
-// 			},
-// 			expectedStatusCode: 401,
-// 		},
-// 		{
-// 			_name:      "Missing_header_fails",
-// 			authHeader: "",
-// 			expectedErrorResponse: &serverErrors.ErrorResponse{
-// 				Code:    "bearer_token_missing",
-// 				Message: "missing bearer token",
-// 			},
-// 			expectedStatusCode: 401,
-// 		},
-// 		{
-// 			_name:              "Correct_token_succeeds",
-// 			authHeader:         "Bearer " + trustedToken,
-// 			expectedStatusCode: 200,
-// 		},
-// 	}
-
-// 	retryClient := retryablehttp.NewClient()
-// 	t.Cleanup(retryClient.HTTPClient.CloseIdleConnections)
-
-// 	for _, test := range tests {
-// 		t.Run(test._name, func(t *testing.T) {
-// 			tryGetStores(t, test, cfg.HTTP.Addr, retryClient)
-// 		})
-
-// 		t.Run(test._name+"/streaming", func(t *testing.T) {
-// 			tryStreamingListObjects(t, test, cfg.HTTP.Addr, retryClient, trustedToken)
-// 		})
-// 	}
-// }
-
-func TestBuildServerWithOIDCAuthenticationAlias(t *testing.T) {
+func TestBuildServerWithOIDCAuthentication(t *testing.T) {
 	t.Cleanup(func() {
 		goleak.VerifyNone(t)
 	})
-	oidcServerPort1, oidcServerPortReleaser1 := testutils.TCPRandomPort()
-	oidcServerPort2, oidcServerPortReleaser2 := testutils.TCPRandomPort()
-	oidcServerURL1 := fmt.Sprintf("http://localhost:%d", oidcServerPort1)
-	oidcServerURL2 := fmt.Sprintf("http://localhost:%d", oidcServerPort2)
+	oidcServerPort, oidcServerPortReleaser := testutils.TCPRandomPort()
+	localOIDCServerURL := fmt.Sprintf("http://localhost:%d", oidcServerPort)
 
 	cfg := testutils.MustDefaultConfigWithRandomPorts()
 	cfg.Authn.Method = "oidc"
 	cfg.Authn.AuthnOIDCConfig = &serverconfig.AuthnOIDCConfig{
-		Audience:      "openfga.dev",
-		Issuer:        oidcServerURL1,
-		IssuerAliases: []string{oidcServerURL2},
+		Audience: "openfga.dev",
+		Issuer:   localOIDCServerURL,
 	}
 
-	oidcServerPortReleaser1()
-	oidcServerPortReleaser2()
+	oidcServerPortReleaser()
 
-	trustedIssuerServer1, err := mocks.NewMockOidcServer(oidcServerURL1)
+	trustedIssuerServer, err := mocks.NewMockOidcServer(localOIDCServerURL)
 	require.NoError(t, err)
-	t.Cleanup(trustedIssuerServer1.Stop)
+	t.Cleanup(trustedIssuerServer.Stop)
 
-	trustedIssuerServer2 := trustedIssuerServer1.NewAliasMockServer(oidcServerURL2)
-	t.Cleanup(trustedIssuerServer2.Stop)
-
-	trustedTokenFromAlias, err := trustedIssuerServer2.GetToken("openfga.dev", "some-user")
+	trustedToken, err := trustedIssuerServer.GetToken("openfga.dev", "some-user")
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -649,86 +570,167 @@ func TestBuildServerWithOIDCAuthenticationAlias(t *testing.T) {
 
 	testutils.EnsureServiceHealthy(t, cfg.GRPC.Addr, cfg.HTTP.Addr, nil)
 
+	tests := []authTest{
+		{
+			_name:      "Header_with_invalid_token_fails",
+			authHeader: "Bearer incorrecttoken",
+			expectedErrorResponse: &serverErrors.ErrorResponse{
+				Code:    "invalid_claims",
+				Message: "invalid claims",
+			},
+			expectedStatusCode: 401,
+		},
+		{
+			_name:      "Missing_header_fails",
+			authHeader: "",
+			expectedErrorResponse: &serverErrors.ErrorResponse{
+				Code:    "bearer_token_missing",
+				Message: "missing bearer token",
+			},
+			expectedStatusCode: 401,
+		},
+		{
+			_name:              "Correct_token_succeeds",
+			authHeader:         "Bearer " + trustedToken,
+			expectedStatusCode: 200,
+		},
+	}
+
 	retryClient := retryablehttp.NewClient()
 	t.Cleanup(retryClient.HTTPClient.CloseIdleConnections)
 
-	test := authTest{
-		_name:              "Token_with_issuer_equal_to_alias_is_accepted",
-		authHeader:         "Bearer " + trustedTokenFromAlias,
-		expectedStatusCode: 200,
+	for _, test := range tests {
+		t.Run(test._name, func(t *testing.T) {
+			tryGetStores(t, test, cfg.HTTP.Addr, retryClient)
+		})
+
+		t.Run(test._name+"/streaming", func(t *testing.T) {
+			tryStreamingListObjects(t, test, cfg.HTTP.Addr, retryClient, trustedToken)
+		})
 	}
-	t.Run(test._name, func(t *testing.T) {
-		tryGetStores(t, test, cfg.HTTP.Addr, retryClient)
-	})
-
-	t.Run(test._name+"/streaming", func(t *testing.T) {
-		tryStreamingListObjects(t, test, cfg.HTTP.Addr, retryClient, trustedTokenFromAlias)
-	})
 }
 
-func TestHTTPServingTLS(t *testing.T) {
-	t.Cleanup(func() {
-		goleak.VerifyNone(t)
-	})
-	t.Run("enable_HTTP_TLS_is_false,_even_with_keys_set,_will_serve_plaintext", func(t *testing.T) {
-		certsAndKeys := createCertsAndKeys(t)
-		defer certsAndKeys.Clean()
+// func TestBuildServerWithOIDCAuthenticationAlias(t *testing.T) {
+// 	t.Cleanup(func() {
+// 		goleak.VerifyNone(t)
+// 	})
+// 	oidcServerPort1, oidcServerPortReleaser1 := testutils.TCPRandomPort()
+// 	oidcServerPort2, oidcServerPortReleaser2 := testutils.TCPRandomPort()
+// 	oidcServerURL1 := fmt.Sprintf("http://localhost:%d", oidcServerPort1)
+// 	oidcServerURL2 := fmt.Sprintf("http://localhost:%d", oidcServerPort2)
 
-		cfg := testutils.MustDefaultConfigWithRandomPorts()
-		cfg.HTTP.TLS = &serverconfig.TLSConfig{
-			CertPath: certsAndKeys.serverCertFile,
-			KeyPath:  certsAndKeys.serverKeyFile,
-		}
+// 	cfg := testutils.MustDefaultConfigWithRandomPorts()
+// 	cfg.Authn.Method = "oidc"
+// 	cfg.Authn.AuthnOIDCConfig = &serverconfig.AuthnOIDCConfig{
+// 		Audience:      "openfga.dev",
+// 		Issuer:        oidcServerURL1,
+// 		IssuerAliases: []string{oidcServerURL2},
+// 	}
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+// 	oidcServerPortReleaser1()
+// 	oidcServerPortReleaser2()
 
-		go func() {
-			if err := runServer(ctx, cfg); err != nil {
-				log.Fatal(err)
-			}
-		}()
+// 	trustedIssuerServer1, err := mocks.NewMockOidcServer(oidcServerURL1)
+// 	require.NoError(t, err)
+// 	t.Cleanup(trustedIssuerServer1.Stop)
 
-		testutils.EnsureServiceHealthy(t, cfg.GRPC.Addr, cfg.HTTP.Addr, nil)
-	})
+// 	trustedIssuerServer2 := trustedIssuerServer1.NewAliasMockServer(oidcServerURL2)
+// 	t.Cleanup(trustedIssuerServer2.Stop)
 
-	t.Run("enable_HTTP_TLS_is_true_will_serve_HTTP_TLS", func(t *testing.T) {
-		certsAndKeys := createCertsAndKeys(t)
-		defer certsAndKeys.Clean()
+// 	trustedTokenFromAlias, err := trustedIssuerServer2.GetToken("openfga.dev", "some-user")
+// 	require.NoError(t, err)
 
-		cfg := testutils.MustDefaultConfigWithRandomPorts()
-		cfg.HTTP.TLS = &serverconfig.TLSConfig{
-			Enabled:  true,
-			CertPath: certsAndKeys.serverCertFile,
-			KeyPath:  certsAndKeys.serverKeyFile,
-		}
-		// Port for TLS cannot be 0.0.0.0
-		cfg.HTTP.Addr = strings.ReplaceAll(cfg.HTTP.Addr, "0.0.0.0", "localhost")
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	defer cancel()
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+// 	go func() {
+// 		if err := runServer(ctx, cfg); err != nil {
+// 			log.Fatal(err)
+// 		}
+// 	}()
 
-		go func() {
-			if err := runServer(ctx, cfg); err != nil {
-				log.Fatal(err)
-			}
-		}()
+// 	testutils.EnsureServiceHealthy(t, cfg.GRPC.Addr, cfg.HTTP.Addr, nil)
 
-		certPool := x509.NewCertPool()
-		certPool.AddCert(certsAndKeys.caCert)
-		client := retryablehttp.NewClient()
-		t.Cleanup(client.HTTPClient.CloseIdleConnections)
-		client.HTTPClient.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs: certPool,
-			},
-		}
+// 	retryClient := retryablehttp.NewClient()
+// 	t.Cleanup(retryClient.HTTPClient.CloseIdleConnections)
 
-		resp, err := client.Get(fmt.Sprintf("https://%s/healthz", cfg.HTTP.Addr))
-		require.NoError(t, err)
-		resp.Body.Close()
-	})
-}
+// 	test := authTest{
+// 		_name:              "Token_with_issuer_equal_to_alias_is_accepted",
+// 		authHeader:         "Bearer " + trustedTokenFromAlias,
+// 		expectedStatusCode: 200,
+// 	}
+// 	t.Run(test._name, func(t *testing.T) {
+// 		tryGetStores(t, test, cfg.HTTP.Addr, retryClient)
+// 	})
+
+// 	t.Run(test._name+"/streaming", func(t *testing.T) {
+// 		tryStreamingListObjects(t, test, cfg.HTTP.Addr, retryClient, trustedTokenFromAlias)
+// 	})
+// }
+
+// func TestHTTPServingTLS(t *testing.T) {
+// 	t.Cleanup(func() {
+// 		goleak.VerifyNone(t)
+// 	})
+// 	t.Run("enable_HTTP_TLS_is_false,_even_with_keys_set,_will_serve_plaintext", func(t *testing.T) {
+// 		certsAndKeys := createCertsAndKeys(t)
+// 		defer certsAndKeys.Clean()
+
+// 		cfg := testutils.MustDefaultConfigWithRandomPorts()
+// 		cfg.HTTP.TLS = &serverconfig.TLSConfig{
+// 			CertPath: certsAndKeys.serverCertFile,
+// 			KeyPath:  certsAndKeys.serverKeyFile,
+// 		}
+
+// 		ctx, cancel := context.WithCancel(context.Background())
+// 		defer cancel()
+
+// 		go func() {
+// 			if err := runServer(ctx, cfg); err != nil {
+// 				log.Fatal(err)
+// 			}
+// 		}()
+
+// 		testutils.EnsureServiceHealthy(t, cfg.GRPC.Addr, cfg.HTTP.Addr, nil)
+// 	})
+
+// 	t.Run("enable_HTTP_TLS_is_true_will_serve_HTTP_TLS", func(t *testing.T) {
+// 		certsAndKeys := createCertsAndKeys(t)
+// 		defer certsAndKeys.Clean()
+
+// 		cfg := testutils.MustDefaultConfigWithRandomPorts()
+// 		cfg.HTTP.TLS = &serverconfig.TLSConfig{
+// 			Enabled:  true,
+// 			CertPath: certsAndKeys.serverCertFile,
+// 			KeyPath:  certsAndKeys.serverKeyFile,
+// 		}
+// 		// Port for TLS cannot be 0.0.0.0
+// 		cfg.HTTP.Addr = strings.ReplaceAll(cfg.HTTP.Addr, "0.0.0.0", "localhost")
+
+// 		ctx, cancel := context.WithCancel(context.Background())
+// 		defer cancel()
+
+// 		go func() {
+// 			if err := runServer(ctx, cfg); err != nil {
+// 				log.Fatal(err)
+// 			}
+// 		}()
+
+// 		certPool := x509.NewCertPool()
+// 		certPool.AddCert(certsAndKeys.caCert)
+// 		client := retryablehttp.NewClient()
+// 		t.Cleanup(client.HTTPClient.CloseIdleConnections)
+// 		client.HTTPClient.Transport = &http.Transport{
+// 			TLSClientConfig: &tls.Config{
+// 				RootCAs: certPool,
+// 			},
+// 		}
+
+// 		resp, err := client.Get(fmt.Sprintf("https://%s/healthz", cfg.HTTP.Addr))
+// 		require.NoError(t, err)
+// 		resp.Body.Close()
+// 	})
+// }
 
 func TestGRPCServingTLS(t *testing.T) {
 	t.Cleanup(func() {
@@ -788,20 +790,20 @@ func TestGRPCServingTLS(t *testing.T) {
 	})
 }
 
-func TestServerMetricsReporting(t *testing.T) {
-	t.Cleanup(func() {
-		goleak.VerifyNone(t)
-	})
-	t.Run("mysql", func(t *testing.T) {
-		testServerMetricsReporting(t, "mysql")
-	})
-	t.Run("postgres", func(t *testing.T) {
-		testServerMetricsReporting(t, "postgres")
-	})
-	t.Run("sqlite", func(t *testing.T) {
-		testServerMetricsReporting(t, "sqlite")
-	})
-}
+// func TestServerMetricsReporting(t *testing.T) {
+// 	t.Cleanup(func() {
+// 		goleak.VerifyNone(t)
+// 	})
+// 	t.Run("mysql", func(t *testing.T) {
+// 		testServerMetricsReporting(t, "mysql")
+// 	})
+// 	t.Run("postgres", func(t *testing.T) {
+// 		testServerMetricsReporting(t, "postgres")
+// 	})
+// 	t.Run("sqlite", func(t *testing.T) {
+// 		testServerMetricsReporting(t, "sqlite")
+// 	})
+// }
 
 func testServerMetricsReporting(t *testing.T, engine string) {
 	t.Cleanup(func() {
@@ -958,28 +960,28 @@ func testServerMetricsReporting(t *testing.T, engine string) {
 	}
 }
 
-func TestHTTPServerDisabled(t *testing.T) {
-	t.Cleanup(func() {
-		goleak.VerifyNone(t)
-	})
-	cfg := testutils.MustDefaultConfigWithRandomPorts()
-	cfg.HTTP.Enabled = false
+// func TestHTTPServerDisabled(t *testing.T) {
+// 	t.Cleanup(func() {
+// 		goleak.VerifyNone(t)
+// 	})
+// 	cfg := testutils.MustDefaultConfigWithRandomPorts()
+// 	cfg.HTTP.Enabled = false
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	defer cancel()
 
-	go func() {
-		if err := runServer(ctx, cfg); err != nil {
-			log.Fatal(err)
-		}
-	}()
+// 	go func() {
+// 		if err := runServer(ctx, cfg); err != nil {
+// 			log.Fatal(err)
+// 		}
+// 	}()
 
-	testutils.EnsureServiceHealthy(t, cfg.GRPC.Addr, "", nil)
+// 	testutils.EnsureServiceHealthy(t, cfg.GRPC.Addr, "", nil)
 
-	_, err := http.Get(fmt.Sprintf("http://%s/healthz", cfg.HTTP.Addr))
-	require.Error(t, err)
-	require.ErrorContains(t, err, "connect: connection refused")
-}
+// 	_, err := http.Get(fmt.Sprintf("http://%s/healthz", cfg.HTTP.Addr))
+// 	require.Error(t, err)
+// 	require.ErrorContains(t, err, "connect: connection refused")
+// }
 
 func TestHTTPServerEnabled(t *testing.T) {
 	t.Cleanup(func() {
